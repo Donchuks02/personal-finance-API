@@ -9,6 +9,7 @@ class TestUserAuth:
         self.client = APIClient()
         self.register_url = 'http://localhost:8000/api/v1/users/register/'
         self.login_url = 'http://localhost:8000/api/v1/users/login/'
+        self.logout_url = 'http://localhost:8000/api/v1/users/logout/'
 
     def test_user_registration_success(self):
         """Test successful user registration."""
@@ -19,13 +20,10 @@ class TestUserAuth:
         }
         response = self.client.post(self.register_url, payload, format='json')
 
-        # verify expected response
-        assert response.status_code == 201
 
-        # verify that user is created in the database
+        assert response.status_code == 201
         assert CustomUser.objects.filter(email=payload['email']).exists()
 
-        # Check if the response contains the expected data
         data = response.json()
         assert data['email'] == payload['email']
         assert data['name'] == payload['name']
@@ -65,3 +63,27 @@ class TestUserAuth:
 
         assert response.status_code == 400
         assert 'invalid credentials' in str(response.data)
+
+    def test_user_logout(self):
+        """Test the users logout funtionality."""
+        CustomUser.objects.create_user(
+            email="logoutVon@gmail.com",
+            name="Von",
+            password="VonPassword123"
+        )
+        payload = {
+            "email": "logoutVon@gmail.com",
+            "password": "VonPassword123"
+        }
+
+
+        login_response = self.client.post(self.login_url, payload, format='json')
+        assert login_response.status_code == 200
+        refresh_token = login_response.data['refresh']
+        access_token = login_response.data['access']
+
+        self.client.credentials(HTTP_AUTHORIZATION='Bearer ' + access_token)
+        logout_response = self.client.post(self.logout_url, {"refresh": refresh_token}, format='json')
+        # print(logout_response.data)
+        assert logout_response.status_code == 205
+        assert 'Successfully logged out.' in str(logout_response.data)
