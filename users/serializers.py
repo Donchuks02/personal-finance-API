@@ -53,7 +53,7 @@ class PasswordResetRequestSerializer(serializers.Serializer):
         token = PasswordResetTokenGenerator().make_token(user)
         uid = urlsafe_base64_encode(force_bytes(user.pk))
 
-        reset_link = f"http://127.0.0.1:8000/api/users/reset-password-confirm/{uid}/{token}/"
+        reset_link = f"http://127.0.0.1:8000/api/v1/users/reset-password-confirm/{uid}/{token}/"
 
         send_mail(
             subject="Password Reset Request",

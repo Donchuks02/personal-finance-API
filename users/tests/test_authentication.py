@@ -1,6 +1,10 @@
 import pytest
 from rest_framework.test import APIClient
 from users.models import CustomUser
+from django.core import mail
+from django.utils.http import urlsafe_base64_encode
+from django.utils.encoding import force_bytes
+from django.contrib.auth.tokens import PasswordResetTokenGenerator
 
 @pytest.mark.django_db
 class TestUserAuth:
@@ -10,6 +14,7 @@ class TestUserAuth:
         self.register_url = 'http://localhost:8000/api/v1/users/register/'
         self.login_url = 'http://localhost:8000/api/v1/users/login/'
         self.logout_url = 'http://localhost:8000/api/v1/users/logout/'
+        self.reset_request_url = 'http://localhost:8000/api/v1/users/reset-password/'
 
     def test_user_registration_success(self):
         """Test successful user registration."""
@@ -87,3 +92,50 @@ class TestUserAuth:
         # print(logout_response.data)
         assert logout_response.status_code == 205
         assert 'Successfully logged out.' in str(logout_response.data)
+
+    def test_password_reset(self):
+        """Test that requesting a password reset sends an email."""
+        user = CustomUser.objects.create_user(
+            email="resetuser@example.com",
+            name="Reset User",
+            password="OldPass123"
+        )
+
+        response = self.client.post(
+            self.reset_request_url,
+            {"email": user.email},
+            format="json"
+        )
+
+        assert response.status_code == 200
+        assert "Password reset link has been sent to your email." in str(response.data)
+        assert len(response.data) == 1
+        assert user.email in mail.outbox[0].to
+
+    
+    def test_password_reset_confirm_changes_password(self):
+        """Test that a reset link allows changing the password."""
+        user = CustomUser.objects.create_user(
+            email="confirmreset@example.com",
+            name="Reset Confirm",
+            password="OldPassword123"
+        )
+
+        uid = urlsafe_base64_encode(force_bytes(user.pk))
+        token = PasswordResetTokenGenerator().make_token(user)
+        confirm_url = f"/api/v1/users/reset-password-confirm/{uid}/{token}/"
+
+        new_password = "NewPassword456"
+        response = self.client.post(confirm_url, {"new_password": new_password}, format='json')
+
+        assert response.status_code == 200
+        assert "Password reset successful." in str(response.data)
+
+        login_response = self.client.post(self.login_url, {
+            "email": user.email, "password": "OldPassword123"}, format='json')
+        
+        assert login_response.status_code == 400
+
+        login_response = self.client.post(self.login_url, {"email": user.email, "password": new_password}, format='json')
+        assert login_response.status_code == 200
+        assert 'access' in login_response.data
