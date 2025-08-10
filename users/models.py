@@ -8,7 +8,7 @@ from django.utils import timezone
 # This class handles the creation of user, the first method creates a regular user while the second method creates a superuser(admin).
 class CustomUserManager(BaseUserManager):
     def create_user(self, email, password=None, **extra_fields):
-        # Ensure that email is provided
+        
         if not email:
             raise ValueError("Email is required")
         email = self.normalize_email(email) # make the provided email lowercase
@@ -18,10 +18,10 @@ class CustomUserManager(BaseUserManager):
         return user
     
     def create_superuser(self, email, password=None, **extra_fields):
-        # ensure that superuser has staff access and superuser privileges
+        
         extra_fields.setdefault('is_staff', True)
         extra_fields.setdefault('is_superuser', True)
-        # Reuse the create_user method attributes to create a superuser
+        
         return self.create_user(email, password, **extra_fields)
 
 
