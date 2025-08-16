@@ -1,53 +1,60 @@
 from django.db import models
 from django.conf import settings
+from django.utils import timezone
+from django.db import transaction
 
 # Create your models here.
 
-
-class Transaction(models.Model):
-
-    INCOME = "IN"
-    EXPENSE = "EX"
-
-    TRANSACTION_TYPES =[
-        (INCOME, "Income"),
-        (EXPENSE, "Expense"),
+class SubAccount(models.Model):
+    ACCOUNT_TYPES = [
+        ("income", "Income"),
+        ("expense", "Expense")
     ]
 
-    CATEGORY_CHOICES = [
-        ('food_groceries', 'Food & Groceries'),
-        ('transportation', 'Transportation'),
-        ('rent', 'Rent'),
-        ('utilities', 'Utilities'),
-        ('internet_phone', 'Internet & Phone'),
-        ('entertainment', 'Entertainment'),
-        ('health_medical', 'Health & Medical'),
-        ('clothing', 'Clothing'),
-        ('education', 'Education'),
-        ('savings', 'Savings'),
-        ('gifts_donations', 'Gifts & Donations'),
-        ('personal_care', 'Personal Care'),
-        ('travel', 'Travel'),
-        ('home_maintenance', 'Home Maintenance'),
-        ('childcare', 'Childcare'),
-        ('insurance', 'Insurance'),
-        ('salary', 'Salary'),
-        ('investment_income', 'Investment Income'),
-        ('other', 'Other'),
-    ]
-
-
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="transactions")
-    amount = models.DecimalField(max_digits=12, decimal_places=2)
-    transaction_type = models.CharField(max_length=2, choices=TRANSACTION_TYPES)
-    # category = models.CharField(max_length=100)
-    category = models.CharField(max_length=100, choices=CATEGORY_CHOICES, blank=True, null=True)
-    description = models.TextField(blank=True)
-    date = models.DateField()
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ["-date", "-created_at"]
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    account_type = models.CharField(max_length=20, choices=ACCOUNT_TYPES)
+    balance = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
 
     def __str__(self):
-        return f"{self.user.email} - {self.transaction_type} - {self.amount}"
+        return f"{self.user.username} - {self.account_type}"
+    
+
+class Category(models.Model):
+    sub_account = models.ForeignKey(SubAccount, on_delete=models.CASCADE)
+    name = models.CharField(max_length=50)
+
+    def __str__(self):
+        return self.name
+
+class Transaction(models.Model):
+    sub_account = models.ForeignKey(SubAccount, on_delete=models.CASCADE)
+    category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    description = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    def save(self, *args, **kwargs):
+        is_new = self.pk is None
+        old_amount = 0
+
+        if not is_new:
+            old_amount = Transaction.objects.get(pk=self.pk).amount
+
+        super().save(*args, **kwargs)
+
+        with transaction.atomic():
+            if self.sub_account.account_type == "income":
+                if is_new:
+                    self.sub_account.balance += self.amount
+                else:
+                    self.sub_account.balance += (self.amount - old_amount)
+            elif self.sub_account.account_type == "expense":
+                if is_new:
+                    self.sub_account.balance -= self.amount
+                else:
+                    self.sub_account.balance -= (self.amount - old_amount)
+            
+            self.sub_account.save()
+
+    def __str__(self):
+        return f"{self.sub_account.account_type} - {self.amount}"
