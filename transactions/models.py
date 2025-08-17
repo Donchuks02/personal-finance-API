@@ -19,12 +19,18 @@ class SubAccount(models.Model):
         return f"{self.user.username} - {self.account_type}"
     
 
+
+
+
 class Category(models.Model):
     sub_account = models.ForeignKey(SubAccount, on_delete=models.CASCADE)
     name = models.CharField(max_length=50)
 
     def __str__(self):
         return self.name
+
+
+
 
 class Transaction(models.Model):
     sub_account = models.ForeignKey(SubAccount, on_delete=models.CASCADE)
